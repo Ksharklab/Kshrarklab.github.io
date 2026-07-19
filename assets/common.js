@@ -1,7 +1,67 @@
+
 import{CONFIG}from"./config.js";
-export async function api(name,body){const r=await fetch(`${CONFIG.SUPABASE_URL}/functions/v1/${name}`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"请求失败");return d}
-export async function loadAMap(){if(window.AMap)return AMap;window._AMapSecurityConfig={securityJsCode:CONFIG.AMAP_SECURITY_CODE};await new Promise((ok,no)=>{const s=document.createElement("script");s.src=`https://webapi.amap.com/maps?v=2.0&key=${CONFIG.AMAP_KEY}&plugin=AMap.DistrictSearch`;s.onload=ok;s.onerror=no;document.head.appendChild(s)});return AMap}
-function searchDistrict(keyword,level){return new Promise((ok,no)=>{new AMap.DistrictSearch({level,subdistrict:1,extensions:"base"}).search(keyword,(s,r)=>s==="complete"?ok(r.districtList?.[0]):no(new Error("行政区加载失败")))})}
-export async function fillProvinces(sel,target=""){const d=await searchDistrict("中国","country");sel.innerHTML='<option value="">请选择省份</option>';for(const x of d.districtList||[]){const o=new Option(x.name,x.adcode);o.dataset.name=x.name;o.dataset.lng=x.center?.lng||"";o.dataset.lat=x.center?.lat||"";sel.add(o)}if(target)sel.value=target}
-export async function fillCities(prov,city,target=""){city.innerHTML='<option value="">请选择城市</option>';const o=prov.selectedOptions[0];if(!o?.value)return;const direct=["110000","120000","310000","500000","810000","820000"];let rows;if(direct.includes(o.value)){rows=[{name:o.dataset.name,adcode:o.value,center:{lng:+o.dataset.lng,lat:+o.dataset.lat}}]}else{rows=(await searchDistrict(o.dataset.name,"province")).districtList||[]}for(const x of rows){const p=new Option(x.name,x.adcode);p.dataset.name=x.name;p.dataset.lng=x.center?.lng||"";p.dataset.lat=x.center?.lat||"";city.add(p)}if(target)city.value=target}
-export const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+export async function api(name,body){
+  const r=await fetch(`${CONFIG.SUPABASE_URL}/functions/v1/${name}`,{
+    method:"POST",
+    headers:{"content-type":"application/json"},
+    body:JSON.stringify(body)
+  });
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(d.error||"请求失败");
+  return d;
+}
+
+export async function loadECharts(){
+  if(window.echarts)return window.echarts;
+  await new Promise((resolve,reject)=>{
+    const s=document.createElement("script");
+    s.src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js";
+    s.onload=resolve;
+    s.onerror=()=>reject(new Error("ECharts 加载失败"));
+    document.head.appendChild(s);
+  });
+  return window.echarts;
+}
+
+async function loadRegion(adcode){
+  const r=await fetch(`https://geo.datav.aliyun.com/areas_v3/bound/${adcode}_full.json`);
+  if(!r.ok)throw new Error("行政区数据加载失败");
+  return r.json();
+}
+
+export async function fillProvinces(sel,target=""){
+  const data=await loadRegion("100000");
+  sel.innerHTML='<option value="">请选择省份</option>';
+  for(const f of data.features||[]){
+    const p=f.properties||{};
+    const center=p.center||p.centroid||[];
+    const o=new Option(p.name,p.adcode);
+    o.dataset.name=p.name||"";
+    o.dataset.lng=center[0]??"";
+    o.dataset.lat=center[1]??"";
+    sel.add(o);
+  }
+  if(target)sel.value=target;
+}
+
+export async function fillCities(prov,city,target=""){
+  city.innerHTML='<option value="">请选择城市</option>';
+  const selected=prov.selectedOptions[0];
+  if(!selected?.value)return;
+  const data=await loadRegion(selected.value);
+  for(const f of data.features||[]){
+    const p=f.properties||{};
+    const center=p.center||p.centroid||[];
+    const o=new Option(p.name,p.adcode);
+    o.dataset.name=p.name||"";
+    o.dataset.lng=center[0]??"";
+    o.dataset.lat=center[1]??"";
+    city.add(o);
+  }
+  if(target)city.value=target;
+}
+
+export const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({
+  "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+}[c]));
